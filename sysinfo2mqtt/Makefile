@@ -1,5 +1,5 @@
 TARGET = sysinfo2mqtt
-CFLAGS = -lmosquitto -Wall
+CFLAGS = -lmosquitto -ljson -Wall
 
 all:: $(TARGET)
 
@@ -8,6 +8,12 @@ $(TARGET): $(TARGET).c
 
 clean::
 	rm -f $(TARGET)
+
+install:
+	strip $(TARGET)
+	cp $(TARGET) /usr/bin/
+	chown root:root /usr/bin/$(TARGET)
+	chmod 0755 /usr/bin/$(TARGET)	
 
 .PHONY: clean
 

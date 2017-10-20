@@ -26,6 +26,14 @@
 * <hostname>/sysinfo/totalswap
 * <hostname>/sysinfo/processes
 *
+* ...sowie als JSON-String, z.B. (nicht sinnvoll formatiert ;-)...):
+* samsung/sysinfo/json 
+* { "hostname": "samsung", "uptime": "0 days, 2:21:32", 
+* "load": [ "0.26", "0.33", "0.42" ], 
+* "ram": { "free": "396684", "share": "141964", "buffer": "166340", 
+* "total": "2051736" }, "swap": { "free": "2988028", "total": "2988028" }, 
+* "processes": "470", "time": { "unix": "1508349461", 
+* "readable": "2017\/09\/18 19:57:41" } }
 * 
 * ---------
 * Have fun!
@@ -40,6 +48,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <mosquitto.h>
+#include <json/json.h>
 
 // MQTT-Defaults
 #define MQTT_HOST 		"dockstar"
@@ -135,6 +144,11 @@ int main(int argc, char **argv)
 	int c;
 	int major, minor, revision;
 	
+	json_object *jobj = json_object_new_object();
+	json_object *jobj1 = json_object_new_object();
+	json_object *jstr;
+	json_object *jarray = json_object_new_array();
+	
 	// Aufrufparameter auslesen/verarbeiten
 	while ((c=getopt(argc, argv, "h:p:?drq:")) != -1) {
 		switch (c) {
@@ -172,6 +186,8 @@ int main(int argc, char **argv)
 	
     // (eigenen) Hostname bestimmen
     gethostname(hostname, sizeof(hostname));
+	jstr = json_object_new_string(hostname);
+	json_object_object_add(jobj, "hostname", jstr);
 
 	// Init Mosquitto-Lib...
     mosquitto_lib_init();
@@ -215,40 +231,83 @@ int main(int argc, char **argv)
 				(si.uptime % SEC_HOUR) / SEC_MINUTE, 
 				 si.uptime % SEC_MINUTE);
 	publish2mqtt(hostname, "uptime", s, mqtt_qos, mqtt_retain);
-
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj, "uptime", jstr);
+	
     sprintf (s, "%.2f", si.loads[0] / LINUX_SYSINFO_LOADS_SCALE);
 	publish2mqtt(hostname, "load1m", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_array_add(jarray, jstr);
 
     sprintf (s, "%.2f", si.loads[1] / LINUX_SYSINFO_LOADS_SCALE);
 	publish2mqtt(hostname, "load5m", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_array_add(jarray, jstr);
 
     sprintf (s, "%.2f", si.loads[2] / LINUX_SYSINFO_LOADS_SCALE);
 	publish2mqtt(hostname, "load15m", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_array_add(jarray, jstr);
+	json_object_object_add(jobj, "load", jarray);
+
+	jarray = json_object_new_array();
+
 	
 	sprintf (s, "%lu", si.freeram * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "freeram", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "free", jstr);
+	json_object_array_add(jarray, jobj1);
 
 	sprintf (s, "%lu", si.sharedram * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "shareram", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "share", jstr);
+	json_object_array_add(jarray, jobj1);
 
 	sprintf (s, "%lu", si.bufferram * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "bufferram", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "buffer", jstr);
+	json_object_array_add(jarray, jobj1);
 
 	sprintf (s, "%lu", si.totalram * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "totalram", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "total", jstr);
+	json_object_array_add(jarray, jobj1);
+
+	json_object_object_add(jobj, "ram", jobj1);
+	jarray = json_object_new_array();
+	jobj1 = json_object_new_object();
 
 	sprintf (s, "%lu", si.freeswap * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "freeswap", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "free", jstr);
+	json_object_array_add(jarray, jobj1);
 
 	sprintf (s, "%lu", si.totalswap * si.mem_unit / ONE_KBYTE);
 	publish2mqtt(hostname, "totalswap", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "total", jstr);
+	json_object_array_add(jarray, jobj1);
+
+	json_object_object_add(jobj, "swap", jobj1);
+	jarray = json_object_new_array();
+	jobj1 = json_object_new_object();
 
 	sprintf (s, "%u", si.procs);
 	publish2mqtt(hostname, "processes", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj, "processes", jstr);
 	
 	// Timestamp ermitteln und publizieren...
 	sprintf(s, "%lu", time(NULL));
 	publish2mqtt(hostname, "unixtime", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "unix", jstr);
+	json_object_array_add(jarray, jobj1);
 
 	time(&tnow);
 	tmnow = localtime(&tnow);
@@ -261,16 +320,23 @@ int main(int argc, char **argv)
 				tmnow->tm_sec
 			);
 	
-	disconnect = true; 
 	
 	publish2mqtt(hostname, "readable_timestamp", s, mqtt_qos, mqtt_retain);
+	jstr = json_object_new_string(s);
+	json_object_object_add(jobj1, "readable", jstr);
+	json_object_array_add(jarray, jobj1);
+	
+	json_object_object_add(jobj, "time", jobj1);
+
+	disconnect = true; 
+	publish2mqtt(hostname, "json", (char *)json_object_to_json_string(jobj), mqtt_qos, mqtt_retain);	
 	
 	// ...hmm, warum werden sonst nicht alle Nachrichten gesendet?
-   	//usleep(10000);
-   	mosquitto_error_handling(mosquitto_loop_forever(mosq, 100000, 1));
+   	usleep(10000);
+   	//mosquitto_error_handling(mosquitto_loop_forever(mosq, 100000, 1));
 
     // Verbindung schliessen und aufraeumen...
-	//mosquitto_disconnect(mosq);
+	mosquitto_disconnect(mosq);
     mosquitto_destroy(mosq);
     mosquitto_lib_cleanup();
 		
