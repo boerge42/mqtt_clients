@@ -313,13 +313,12 @@ int main(int argc, char **argv)
 	tmnow = localtime(&tnow);
 	sprintf(s, "%d/%02d/%02d %02d:%02d:%02d", 
 				tmnow->tm_year+1900,
-				tmnow->tm_mon,
+				tmnow->tm_mon+1, 
 				tmnow->tm_mday,
 				tmnow->tm_hour,
 				tmnow->tm_min,
 				tmnow->tm_sec
 			);
-	
 	
 	publish2mqtt(hostname, "readable_timestamp", s, mqtt_qos, mqtt_retain);
 	jstr = json_object_new_string(s);
